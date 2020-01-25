@@ -1,0 +1,5 @@
+# QtCreator
+*.autosave
+
+# QtCreator CMake
+CMakeLists.txt.user*
