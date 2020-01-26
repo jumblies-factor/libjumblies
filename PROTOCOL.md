@@ -18,6 +18,7 @@ Strings are encoded in utf-8.
 `<verb> [argument 1] [argument 2] ...`
 
 Arguments can take one of  the following forms:
+
 | Format       | Description                                                  |
 | ------------ | ------------------------------------------------------------ |
 | `argument`   | An argument with no special chars, spaces or newlines        |
@@ -48,32 +49,55 @@ Payload strings are the preferred format for most argument types, as they are
 low in overhead. The arguments are read in order, and all arguments will be
 parsed before the next line is read.
 
-### Special verbs
-`GOAWAY` means that the client should disconnect. Any work is now void, and 
+## Initialisation
+The client sends a `HI <arch triplet>`, and the server responds with `GREET`.
+
+The client can now ask for a list of jobs with `JOBS`, probe their dependencies
+with `PREREQ`, and check the type of files with `DESC`.
+
+After finding one or more jobs they want, they `ENROLL` in those jobs, and send
+a ready when they are done.
+
+The first argument to the response to a `PREREQ` is the main work runtime,
+which is responsible for communicating with the client controller.
+
+## Work loop
+The client sends an `READY` request when it wants another task.
+
+The server's reponse must be forwarded directly to the work runtime as a 
+`jumblies::proto::arg_list` (in the case of a shared object), or as a string
+(in all other cases).
+
+When the task is complete, the client must forward the `DONE` request, with 
+arguments from the returned `jumblies::proto::arg_list`.
+
+The runtime may also send `UPDATE` requests, which should also be forwarded to
+the remote server.
+
+## Push requests
+Whilst almost all requests are sent from the client, the server may need to
+interject with its own requests. These, and reponses thereof, should have an
+exclaimation mark immediately before the verb (i.e. `!LAYOFF`).
+
+## All verbs
+### Client verbs
+| Verb     | Arguments        | Description                                  |
+| -------- | ---------------- | -------------------------------------------- |
+| `HI`     | `<arch triplet>` | Used to start a connection                   |
+| `JOBS`   |                  | Lists all the jobs available for this client |
+| `ENROLL` | `<job id>`       | Applies for a job                            |
+| `PREREQ` | `<job id>`       | Asks for a list of files required for a job  |
+| `DESC`   | `<file hash>`    | Asks for the metadata of a file hash         |
+| `GET`    | `<file hash>`    | Asks for the contents of a file hash         |
+| `UPDATE` | `<job id> ...`   | Sends some update information to the server  |
+| `DONE`   | `<job id> ...`   | Sends the result of a task to the server     |
+
+## Special verbs
+`!GOAWAY` means that the client should disconnect. Any work is now void, and 
 should be stopped immediately.
 
 `BYE` is the client equivalent: the server should disconnect from the client,
 and remove it from any pending task queues.
 
-## Initialisation
-| Client              | Master              | 
-| ------------------- | ------------------- |
-| `HI <arch triplet>` | `GREET` or `GOAWAY` |
-| `JOBS`              | `AVAIL (job id)...` |
-| `ENROLL <job id>`   | `WORK (job DSO)...` |
-
-The client loads the DSO on the WORK response, and is now ready to start
-accepting tasks.
-
-## Work loop
-The client sends an `READY` request when it wants another task.
-
-The server may respond with a `TASK` response, which must be forwarded directly
-to the work DSO as a `jumblies::proto::arg_list`.
-
-The server may respond with a `LAYOFF` command instead, at which point the 
-client may `ENROLL` in another job, ask for the list of `JOBS` again, or just
-say `BYE`.
-
-When the task is complete, the client must send a `DONE` command, with 
-arguments from the returned `jumblies::proto::arg_list`.
+`!LAYOFF (job id)...`  means that the client should stop working on the 
+specified job(s).
